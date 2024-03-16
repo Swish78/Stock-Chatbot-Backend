@@ -1,5 +1,4 @@
 import json
-import openai
 import pandas as pd
 import matplotlib.pyplot as plt
 import yfinance as yf
@@ -11,6 +10,7 @@ def get_stock_price(ticker, period='1y'):
 
     Args:
         ticker (str): The stock ticker symbol.
+        period (str, optional): The time period for which to fetch the stock data (default is '1y').
 
     Returns:
         str: The latest closing price of the stock.
@@ -41,14 +41,14 @@ def get_stock_volume(ticker):
         return f"Error fetching stock volume for {ticker}: {str(e)}"
 
 
-def calculate_sma(ticker,period='1y', window=50):
+def calculate_sma(ticker, period='1y', window=50):
     """
     Calculate the Simple Moving Average (SMA) for a given stock.
 
     Args:
         ticker (str): The stock ticker symbol.
-        period (str): The time period for which to fetch the stock data (e.g., '1y', '6m', '1d').
-        window (int): The window size for the SMA calculation (e.g., 20, 50, 200).
+        period (str, optional): The time period for which to fetch the stock data (default is '1y').
+        window (int, optional): The window size for the SMA calculation (default is 50).
 
     Returns:
         str: The calculated SMA value for the given stock and time period.
@@ -61,39 +61,46 @@ def calculate_sma(ticker,period='1y', window=50):
         return f"Error calculating SMA for {ticker}: {str(e)}"
 
 
-def calculate_ema(ticker,period='1y' ,window=50):
+def calculate_ema(ticker, period='1y', window=50):
     """
-    Calculate the (EMA) for a given stock.
+    Calculate the Exponential Moving Average (EMA) for a given stock.
 
     Args:
         ticker (str): The stock ticker symbol.
-        period (str): The time period for which to fetch the stock data (e.g., '1y', '6m', '1d').
-        window (int): The window size for the SMA calculation (e.g., 20, 50, 200).
+        period (str, optional): The time period for which to fetch the stock data (default is '1y').
+        window (int, optional): The window size for the EMA calculation (default is 50).
 
     Returns:
-        str: The calculated SMA value for the given stock and time period.
+        str: The calculated EMA value for the given stock and time period.
     """
     try:
         stock_data = yf.Ticker(ticker).history(period=period)
-        ema = stock_data['Close'].rolling(span=window, adjust=False).mean().iloc[-1]
+
+        # Calculate the multiplier for the EMA
+        multiplier = 2 / (window + 1)
+
+        # Calculate the EMA
+        ema = stock_data['Close'].ewm(com=multiplier, adjust=False).mean().iloc[-1]
+
         return str(ema)
     except Exception as e:
-        return f"Error calculating SMA for {ticker}: {str(e)}"
+        return f"Error calculating EMA for {ticker}: {str(e)}"
 
 
-def calculate_rsi(ticker, window=14):
+def calculate_rsi(ticker, period='1y', window=14):
     """
     Calculate the Relative Strength Index (RSI) for a given stock.
 
     Args:
         ticker (str): The stock ticker symbol.
-        window (int): The window size for RSI calculation (default is 14).
+        period (str, optional): The time period for which to fetch the stock data (default is '1y').
+        window (int, optional): The window size for RSI calculation (default is 14).
 
     Returns:
         str: The calculated RSI value for the given stock.
     """
     try:
-        stock_data = yf.Ticker(ticker).history(period='1y')
+        stock_data = yf.Ticker(ticker).history(period=period)
         delta = stock_data['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
@@ -104,21 +111,22 @@ def calculate_rsi(ticker, window=14):
         return f"Error calculating RSI for {ticker}: {str(e)}"
 
 
-def calculate_macd(ticker, short_window=12, long_window=26, signal_window=9):
+def calculate_macd(ticker, period='1y', short_window=12, long_window=26, signal_window=9):
     """
     Calculate the Moving Average Convergence Divergence (MACD) for a given stock.
 
     Args:
         ticker (str): The stock ticker symbol.
-        short_window (int): The short window size (default is 12).
-        long_window (int): The long window size (default is 26).
-        signal_window (int): The signal window size (default is 9).
+        period (str, optional): The time period for which to fetch the stock data (default is '1y').
+        short_window (int, optional): The short window size (default is 12).
+        long_window (int, optional): The long window size (default is 26).
+        signal_window (int, optional): The signal window size (default is 9).
 
     Returns:
         str: The MACD value for the given stock.
     """
     try:
-        stock_data = yf.Ticker(ticker).history(period='1y')
+        stock_data = yf.Ticker(ticker).history(period=period)
         short_ema = stock_data['Close'].ewm(span=short_window, min_periods=1, adjust=False).mean()
         long_ema = stock_data['Close'].ewm(span=long_window, min_periods=1, adjust=False).mean()
         macd = short_ema - long_ema
@@ -135,10 +143,10 @@ def plot_stock_price(ticker, period='1y'):
 
     Args:
         ticker (str): The stock ticker symbol.
-        period (str): The time period for which to fetch the stock data (default is '1y').
+        period (str, optional): The time period for which to fetch the stock data (default is '1y').
     """
-    stock_data = get_stock_price(ticker, period)
-    if stock_data is not None:
+    stock_data = yf.Ticker(ticker).history(period=period)
+    if not stock_data.empty:
         plt.figure(figsize=(10, 6))
         plt.plot(stock_data.index, stock_data['Close'], label=f'{ticker} Close Price')
         plt.title(f'{ticker} Stock Price')
@@ -148,6 +156,8 @@ def plot_stock_price(ticker, period='1y'):
         plt.grid(True)
         plt.savefig(f'{ticker}.png')
         plt.close()
+    else:
+        print(f"Error fetching stock data for {ticker}")
 
 
 function_metadata = {
@@ -155,103 +165,152 @@ function_metadata = {
         "name": "get_stock_price",
         "description": "Get the latest closing price of a stock.",
         "parameters": {
-            "ticker": {
-                "type": "str",
-                "description": "The stock ticker symbol."
+            "type": "object",
+            "properties": {
+                "ticker": {
+                    "type": "string",
+                    "description": "The stock ticker symbol."
+                },
+                "period": {
+                    "type": "string",
+                    "description": "The time period for which to fetch the stock data (default is '1y').",
+                    "default": "1y"
+                }
             },
-            "period": {
-                "type": "str",
-                "description": "The time period for which to fetch the stock data (default is '1y')."
-            }
+            "required": ["ticker"]
         }
     },
     "get_stock_volume": {
         "name": "get_stock_volume",
         "description": "Get the historical volume data for a stock.",
         "parameters": {
-            "ticker": {
-                "type": "str",
-                "description": "The stock ticker symbol."
-            }
+            "type": "object",
+            "properties": {
+                "ticker": {
+                    "type": "string",
+                    "description": "The stock ticker symbol."
+                }
+            },
+            "required": ["ticker"]
         }
     },
     "calculate_sma": {
         "name": "calculate_sma",
         "description": "Calculate the Simple Moving Average (SMA) for a given stock.",
         "parameters": {
-            "ticker": {
-                "type": "str",
-                "description": "The stock ticker symbol."
+            "type": "object",
+            "properties": {
+                "ticker": {
+                    "type": "string",
+                    "description": "The stock ticker symbol."
+                },
+                "period": {
+                    "type": "string",
+                    "description": "The time period for which to fetch the stock data (default is '1y').",
+                    "default": "1y"
+                },
+                "window": {
+                    "type": "integer",
+                    "description": "The window size for the SMA calculation (default is 50).",
+                    "default": 50
+                }
             },
-            "window": {
-                "type": "int",
-                "description": "The window size for the SMA calculation."
-            }
+            "required": ["ticker"]
         }
     },
     "calculate_ema": {
         "name": "calculate_ema",
         "description": "Calculate the Exponential Moving Average (EMA) for a given stock.",
         "parameters": {
-            "ticker": {
-                "type": "str",
-                "description": "The stock ticker symbol."
+            "type": "object",
+            "properties": {
+                "ticker": {
+                    "type": "string",
+                    "description": "The stock ticker symbol."
+                },
+                "period": {
+                    "type": "string",
+                    "description": "The time period for which to fetch the stock data (default is '1y').",
+                    "default": "1y"
+                },
+                "window": {
+                    "type": "integer",
+                    "description": "The window size for the EMA calculation (default is 50).",
+                    "default": 50
+                }
             },
-            "window": {
-                "type": "int",
-                "description": "The window size for the EMA calculation."
-            }
+            "required": ["ticker"]
         }
     },
     "calculate_rsi": {
         "name": "calculate_rsi",
         "description": "Calculate the Relative Strength Index (RSI) for a given stock.",
         "parameters": {
-            "ticker": {
-                "type": "str",
-                "description": "The stock ticker symbol."
+            "type": "object",
+            "properties": {
+                "ticker": {
+                    "type": "string",
+                    "description": "The stock ticker symbol."
+                },
+                "period": {
+                    "type": "string",
+                    "description": "The time period for which to fetch the stock data (default is '1y').",
+                    "default": "1y"
+                },
+                "window": {
+                    "type": "integer",
+                    "description": "The window size for RSI calculation (default is 14).",
+                    "default": 14
+                }
             },
-            "window": {
-                "type": "int",
-                "description": "The window size for RSI calculation (default is 14)."
-            }
+            "required": ["ticker"]
         }
     },
     "calculate_macd": {
         "name": "calculate_macd",
         "description": "Calculate the Moving Average Convergence Divergence (MACD) for a given stock.",
         "parameters": {
-            "ticker": {
-                "type": "str",
-                "description": "The stock ticker symbol."
+            "type": "object",
+            "properties": {
+                "ticker": {
+                    "type": "string",
+                    "description": "The stock ticker symbol."
+                },
+                "period": {
+                    "type": "string",
+                    "description": "The time period for which to fetch the stock data (default is '1y').",
+                    "default": "1y"
+                },
+                "short_window": {
+                    "type": "integer",
+                    "description": "The short window size (default is 12).",
+                    "default": 12
+                },
+                "long_window": {
+                    "type": "integer",
+                    "description": "The long window size (default is 26).",
+                    "default": 26
+                },
+                "signal_window": {
+                    "type": "integer",
+                    "description": "The signal window size (default is 9).",
+                    "default": 9
+                }
             },
-            "short_window": {
-                "type": "int",
-                "description": "The short window size (default is 12)."
-            },
-            "long_window": {
-                "type": "int",
-                "description": "The long window size (default is 26)."
-            },
-            "signal_window": {
-                "type": "int",
-                "description": "The signal window size (default is 9)."
-            }
+            "required": ["ticker"]
         }
     }
 }
 
-
 function_mapping = {
     "get_stock_price": get_stock_price,
-    "get_stock_volume": get_stock_volume,
+    # "get_stock_volume": get_stock_volume,
     "calculate_sma": calculate_sma,
     "calculate_ema": calculate_ema,
     "calculate_rsi": calculate_rsi,
     "calculate_macd": calculate_macd
 }
 
-# gpt-3.5-turbo-0125
-
-# sma_50 = calculate_sma('AAPL', '1y', 50)
+# Example usage
+# sma_50 = get_stock_price('AAPL', '1y')
 # print(f"50-day SMA for AAPL: {sma_50}")
