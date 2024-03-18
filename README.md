@@ -49,7 +49,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"query": "What is the curr
 
 ## Contributors:
 
-- [Your Name](https://github.com/Swish78)
+- [Swayam](https://github.com/Swish78)
 
 ## License:
 
